@@ -1,4 +1,4 @@
-const CACHE_NAME = 'my-progress-neon-v8';
+const CACHE_NAME = 'my-progress-neon-v9';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './pushups.svg', './pullups.svg'];
 self.addEventListener('install', event => {
   event.waitUntil((async () => {

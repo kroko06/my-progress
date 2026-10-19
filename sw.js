@@ -1,12 +1,17 @@
-const CACHE_NAME = 'my-progress-neon-v9';
+const CACHE_NAME = 'my-progress-neon-v11';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './pushups.svg', './pullups.svg'];
+
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await Promise.all(ASSETS.map(async asset => { try { await cache.add(asset); } catch (error) { console.warn('Не удалось кешировать ресурс:', asset, error); } }));
+    await Promise.all(ASSETS.map(async asset => {
+      try { await cache.add(asset); }
+      catch (error) { console.warn('Не удалось кешировать ресурс:', asset, error); }
+    }));
     await self.skipWaiting();
   })());
 });
+
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
@@ -14,22 +19,32 @@ self.addEventListener('activate', event => {
     await self.clients.claim();
   })());
 });
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(event.request);
-    if (cached) {
-      if (event.request.mode === 'navigate') event.waitUntil(fetch(event.request).then(response => { if (response.ok) cache.put('./index.html', response.clone()); }).catch(() => {}));
-      return cached;
+
+    // For page navigation, prefer the newest deployed HTML; use cache only offline.
+    if (event.request.mode === 'navigate') {
+      try {
+        const response = await fetch(event.request, { cache: 'no-store' });
+        if (response.ok) await cache.put('./index.html', response.clone());
+        return response;
+      } catch (error) {
+        return (await cache.match('./index.html')) || (await cache.match('./')) || Response.error();
+      }
     }
+
     try {
       const response = await fetch(event.request);
-      if (response.ok && new URL(event.request.url).origin === self.location.origin) cache.put(event.request, response.clone());
+      if (response.ok) await cache.put(event.request, response.clone());
       return response;
     } catch (error) {
-      if (event.request.mode === 'navigate') return (await cache.match('./index.html')) || Response.error();
-      return Response.error();
+      return (await cache.match(event.request)) || Response.error();
     }
   })());
 });
